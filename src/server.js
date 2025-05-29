@@ -28,7 +28,7 @@ app.get("/", (req, res) => {
 
 // GET /thoughts - return full array of thoughts
 app.get("/thoughts", (req, res) => {
-  const { page, limit, category } = req.query
+  const { page, limit, category, sort } = req.query
   
   // Start with all thoughts
   let filteredThoughts = thoughtsData
@@ -38,6 +38,29 @@ app.get("/thoughts", (req, res) => {
     filteredThoughts = filteredThoughts.filter(thought => 
       thought.category && thought.category.toLowerCase() === category.toLowerCase()
     )
+  }
+  
+  // Apply sorting if specified
+  if (sort) {
+    const isDescending = sort.startsWith('-')
+    const sortField = isDescending ? sort.substring(1) : sort
+    
+    filteredThoughts = filteredThoughts.sort((a, b) => {
+      let valueA = a[sortField]
+      let valueB = b[sortField]
+      
+      // Handle date sorting
+      if (sortField === 'createdAt') {
+        valueA = new Date(valueA)
+        valueB = new Date(valueB)
+      }
+      
+      if (isDescending) {
+        return valueB > valueA ? 1 : valueB < valueA ? -1 : 0
+      } else {
+        return valueA > valueB ? 1 : valueA < valueB ? -1 : 0
+      }
+    })
   }
   
   // Apply pagination if specified
