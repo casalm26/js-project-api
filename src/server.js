@@ -28,7 +28,29 @@ app.get("/", (req, res) => {
 
 // GET /thoughts - return full array of thoughts
 app.get("/thoughts", (req, res) => {
-  res.json(thoughtsData)
+  const { page, limit, category } = req.query
+  
+  // Start with all thoughts
+  let filteredThoughts = thoughtsData
+  
+  // Filter by category if specified
+  if (category) {
+    filteredThoughts = filteredThoughts.filter(thought => 
+      thought.category && thought.category.toLowerCase() === category.toLowerCase()
+    )
+  }
+  
+  // Apply pagination if specified
+  if (page || limit) {
+    const pageNum = parseInt(page) || 1
+    const limitNum = parseInt(limit) || 20
+    const startIndex = (pageNum - 1) * limitNum
+    const endIndex = startIndex + limitNum
+    
+    filteredThoughts = filteredThoughts.slice(startIndex, endIndex)
+  }
+  
+  res.json(filteredThoughts)
 })
 
 // GET /thoughts/:id - return single thought by ID
