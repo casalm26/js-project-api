@@ -1,11 +1,14 @@
 import express from "express"
-import { getApiDocumentation } from "../config/apiDocs.js"
+import listEndpoints from "express-list-endpoints"
 
 const router = express.Router()
 
-// GET / - API documentation
+// GET / - API documentation using express-list-endpoints
 router.get("/", (req, res) => {
-  res.json(getApiDocumentation())
+  // We need access to the main app to list all endpoints
+  // This will be handled by passing the app instance
+  const endpoints = listEndpoints(req.app)
+  res.json(endpoints)
 })
 
 export default router 
