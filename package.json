@@ -7,7 +7,8 @@
     "start": "babel-node src/server.js",
     "dev": "nodemon src/server.js --exec babel-node",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "seed-db": "babel-node scripts/seedThoughts.js"
   },
   "author": "",
   "license": "ISC",
