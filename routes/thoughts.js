@@ -1,6 +1,7 @@
 import express from "express"
 import Thought from "../models/Thought.js"
 import { validateThoughtsQuery, validateThoughtId } from "../src/middleware/validation.js"
+import { authenticateToken } from "../middleware/authMiddleware.js"
 
 const router = express.Router()
 
@@ -57,6 +58,56 @@ router.get("/", validateThoughtsQuery, async (req, res) => {
     res.status(500).json({
       error: "Internal Server Error",
       details: "Failed to fetch thoughts"
+    })
+  }
+})
+
+// POST /thoughts - create a new thought (protected route)
+router.post("/", authenticateToken, async (req, res) => {
+  try {
+    const { message, category = "General" } = req.body
+    
+    // Validate required fields
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: "Message is required"
+      })
+    }
+    
+    // Create new thought
+    const thoughtData = {
+      message: message.trim(),
+      category,
+      owner: req.user.userId, // Link to authenticated user
+      hearts: 0,
+      likedBy: []
+    }
+    
+    const newThought = new Thought(thoughtData)
+    const savedThought = await newThought.save()
+    
+    // Populate owner info and return
+    const populatedThought = await Thought.findById(savedThought._id)
+      .populate('owner', 'name email')
+      .exec()
+    
+    res.status(201).json(populatedThought)
+    
+  } catch (error) {
+    console.error('Error creating thought:', error)
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      return res.status(422).json({
+        error: "Validation Error",
+        details: Object.values(error.errors).map(e => e.message)
+      })
+    }
+    
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: "Failed to create thought"
     })
   }
 })
