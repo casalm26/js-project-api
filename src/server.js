@@ -1,16 +1,13 @@
 import cors from "cors"
 import express from "express"
 import dotenv from "dotenv"
+import connectDB from "./db.js"
 import indexRoutes from "./routes/index.js"
-import thoughtsRoutes from "./routes/thoughts.js"
-import authRoutes from "./routes/auth.js"
-import { loadThoughtsData } from "./services/dataService.js"
+import thoughtsRoutes from "../routes/thoughts.js"
+import authRoutes from "../routes/auth.js"
 
 // Load environment variables
 dotenv.config()
-
-// Initialize data
-loadThoughtsData()
 
 // App configuration
 const port = process.env.PORT || 8080
@@ -87,7 +84,20 @@ app.use((err, req, res, _next) => {
   })
 })
 
-// Start the server
-app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`)
-})
+// Start the server with MongoDB connection
+const startServer = async () => {
+  try {
+    // Connect to MongoDB first
+    await connectDB()
+    
+    // Start the Express server after successful DB connection
+    app.listen(port, () => {
+      console.log(`Server running on http://localhost:${port}`)
+    })
+  } catch (error) {
+    console.error('Failed to start server:', error)
+    process.exit(1)
+  }
+}
+
+startServer()
