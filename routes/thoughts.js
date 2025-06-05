@@ -148,4 +148,189 @@ router.get("/:id", validateThoughtId, async (req, res) => {
   }
 })
 
+// POST /thoughts/:id/like - toggle like/unlike for authenticated user (idempotent)
+router.post("/:id/like", authenticateToken, validateThoughtId, async (req, res) => {
+  try {
+    const { id } = req.params
+    const userId = req.user.userId
+    
+    const thought = await Thought.findById(id)
+    
+    if (!thought) {
+      return res.status(404).json({
+        error: "Not found",
+        details: `Thought with ID '${id}' does not exist`
+      })
+    }
+    
+    // Check if user has already liked this thought
+    const hasLiked = thought.likedBy.includes(userId)
+    
+    let updatedThought
+    if (hasLiked) {
+      // Unlike: remove user from likedBy array and decrement hearts
+      updatedThought = await Thought.findByIdAndUpdate(
+        id,
+        {
+          $pull: { likedBy: userId },
+          $inc: { hearts: -1 }
+        },
+        { new: true }
+      ).populate('owner', 'name email')
+    } else {
+      // Like: add user to likedBy array and increment hearts
+      updatedThought = await Thought.findByIdAndUpdate(
+        id,
+        {
+          $addToSet: { likedBy: userId }, // $addToSet prevents duplicates
+          $inc: { hearts: 1 }
+        },
+        { new: true }
+      ).populate('owner', 'name email')
+    }
+    
+    res.status(200).json(updatedThought)
+    
+  } catch (error) {
+    console.error('Error toggling like:', error)
+    
+    // Handle invalid ObjectId errors
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: "Invalid thought ID format"
+      })
+    }
+    
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: "Failed to toggle like"
+    })
+  }
+})
+
+// PUT /thoughts/:id - edit thought message (owner only)
+router.put("/:id", authenticateToken, validateThoughtId, async (req, res) => {
+  try {
+    const { id } = req.params
+    const { message } = req.body
+    const userId = req.user.userId
+    
+    // Validate message
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: "Message is required"
+      })
+    }
+    
+    // Find the thought first to check ownership
+    const thought = await Thought.findById(id)
+    
+    if (!thought) {
+      return res.status(404).json({
+        error: "Not found",
+        details: `Thought with ID '${id}' does not exist`
+      })
+    }
+    
+    // Check if the authenticated user is the owner
+    if (!thought.owner || thought.owner.toString() !== userId) {
+      return res.status(403).json({
+        error: "Forbidden",
+        details: "You can only edit your own thoughts"
+      })
+    }
+    
+    // Update the thought
+    const updatedThought = await Thought.findByIdAndUpdate(
+      id,
+      { 
+        message: message.trim(),
+        updatedAt: new Date()
+      },
+      { new: true }
+    ).populate('owner', 'name email')
+    
+    res.status(200).json(updatedThought)
+    
+  } catch (error) {
+    console.error('Error updating thought:', error)
+    
+    // Handle invalid ObjectId errors
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: "Invalid thought ID format"
+      })
+    }
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      return res.status(422).json({
+        error: "Validation Error",
+        details: Object.values(error.errors).map(e => e.message)
+      })
+    }
+    
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: "Failed to update thought"
+    })
+  }
+})
+
+// DELETE /thoughts/:id - delete thought (owner only)
+router.delete("/:id", authenticateToken, validateThoughtId, async (req, res) => {
+  try {
+    const { id } = req.params
+    const userId = req.user.userId
+    
+    // Find the thought first to check ownership
+    const thought = await Thought.findById(id)
+    
+    if (!thought) {
+      return res.status(404).json({
+        error: "Not found",
+        details: `Thought with ID '${id}' does not exist`
+      })
+    }
+    
+    // Check if the authenticated user is the owner
+    if (!thought.owner || thought.owner.toString() !== userId) {
+      return res.status(403).json({
+        error: "Forbidden",
+        details: "You can only delete your own thoughts"
+      })
+    }
+    
+    // Delete the thought
+    await Thought.findByIdAndDelete(id)
+    
+    res.status(200).json({
+      message: "Thought deleted successfully",
+      deletedThought: {
+        id: thought._id,
+        message: thought.message
+      }
+    })
+    
+  } catch (error) {
+    console.error('Error deleting thought:', error)
+    
+    // Handle invalid ObjectId errors
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: "Invalid thought ID format"
+      })
+    }
+    
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: "Failed to delete thought"
+    })
+  }
+})
+
 export default router 
