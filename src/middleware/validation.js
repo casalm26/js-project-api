@@ -1,5 +1,5 @@
 export const validateThoughtsQuery = (req, res, next) => {
-  const { page, limit, sort } = req.query
+  const { page, limit, sort, category, minHearts, newerThan } = req.query
   const errors = []
   
   // Validate page parameter
@@ -12,12 +12,30 @@ export const validateThoughtsQuery = (req, res, next) => {
     errors.push("limit must be a positive integer between 1 and 100")
   }
   
-  // Validate sort parameter
+  // Validate sort parameter - STRETCH-04: Enhanced sorting options
   if (sort) {
-    const validSortFields = ['hearts', 'createdAt', '_id', 'message']
+    const validSortFields = ['hearts', 'createdAt', 'updatedAt', 'category', '_id', 'message']
     const sortField = sort.startsWith('-') ? sort.substring(1) : sort
     if (!validSortFields.includes(sortField)) {
       errors.push(`sort field must be one of: ${validSortFields.join(', ')} (use - prefix for descending order)`)
+    }
+  }
+  
+  // STRETCH-03: Validate category parameter (flexible - allow any string for filtering)
+  if (category && category.trim().length === 0) {
+    errors.push("category cannot be empty")
+  }
+  
+  // STRETCH-04: Validate minHearts parameter
+  if (minHearts && (isNaN(parseInt(minHearts)) || parseInt(minHearts) < 0)) {
+    errors.push("minHearts must be a non-negative integer")
+  }
+  
+  // STRETCH-04: Validate newerThan parameter
+  if (newerThan) {
+    const date = new Date(newerThan)
+    if (isNaN(date.getTime())) {
+      errors.push("newerThan must be a valid date (ISO 8601 format recommended, e.g., 2024-01-01T00:00:00Z)")
     }
   }
   

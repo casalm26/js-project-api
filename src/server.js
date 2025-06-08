@@ -1,10 +1,12 @@
 import cors from "cors"
 import express from "express"
+import helmet from "helmet"
 import dotenv from "dotenv"
 import connectDB from "./db.js"
 import indexRoutes from "./routes/index.js"
 import thoughtsRoutes from "../routes/thoughts.js"
 import authRoutes from "../routes/auth.js"
+import usersRoutes from "../routes/users.js"
 
 // Load environment variables
 dotenv.config()
@@ -12,6 +14,9 @@ dotenv.config()
 // App configuration
 const port = process.env.PORT || 8080
 const app = express()
+
+// Security middleware
+app.use(helmet())
 
 // Middleware
 app.use(cors())
@@ -21,6 +26,7 @@ app.use(express.json())
 app.use("/", indexRoutes)
 app.use("/thoughts", thoughtsRoutes)
 app.use("/auth", authRoutes)
+app.use("/users", usersRoutes)
 
 // Catch-all 404 route for unknown paths
 app.use("*", (req, res) => {

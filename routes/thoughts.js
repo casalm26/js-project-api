@@ -1,14 +1,16 @@
 import express from "express"
 import Thought from "../models/Thought.js"
 import { validateThoughtsQuery, validateThoughtId } from "../src/middleware/validation.js"
+import { thoughtValidation } from "../middleware/validation.js"
 import { authenticateToken } from "../middleware/authMiddleware.js"
+import { thoughtCreationRateLimit } from "../middleware/rateLimiting.js"
 
 const router = express.Router()
 
 // GET /thoughts - return filtered, sorted, and paginated thoughts from MongoDB
 router.get("/", validateThoughtsQuery, async (req, res) => {
   try {
-    const { page, limit, category, sort } = req.query
+    const { page, limit, category, sort, minHearts, newerThan } = req.query
     
     // Build query object for filtering
     const query = {}
@@ -16,17 +18,37 @@ router.get("/", validateThoughtsQuery, async (req, res) => {
       query.category = new RegExp(category, 'i') // Case-insensitive search
     }
     
+    // STRETCH-04: Advanced filters
+    if (minHearts) {
+      const minHeartsNum = parseInt(minHearts)
+      if (!isNaN(minHeartsNum) && minHeartsNum >= 0) {
+        query.hearts = { $gte: minHeartsNum }
+      }
+    }
+    
+    if (newerThan) {
+      const date = new Date(newerThan)
+      if (date instanceof Date && !isNaN(date)) {
+        query.createdAt = { $gte: date }
+      }
+    }
+    
     // Set up pagination
     const pageNum = parseInt(page) || 1
     const limitNum = parseInt(limit) || 20
     const skip = (pageNum - 1) * limitNum
     
-    // Build sort object
+    // Build sort object - STRETCH-04: Enhanced sorting
     let sortObj = { createdAt: -1 } // Default: newest first
     if (sort) {
       const isDescending = sort.startsWith('-')
       const sortField = isDescending ? sort.substring(1) : sort
-      sortObj = { [sortField]: isDescending ? -1 : 1 }
+      
+      // Allow sorting by different fields
+      const allowedSortFields = ['createdAt', 'updatedAt', 'hearts', 'category']
+      if (allowedSortFields.includes(sortField)) {
+        sortObj = { [sortField]: isDescending ? -1 : 1 }
+      }
     }
     
     // Execute query with pagination and sorting
@@ -50,6 +72,12 @@ router.get("/", validateThoughtsQuery, async (req, res) => {
         totalCount,
         hasNextPage: pageNum < totalPages,
         hasPrevPage: pageNum > 1
+      },
+      filters: {
+        category,
+        minHearts,
+        newerThan,
+        sort
       }
     })
     
@@ -62,10 +90,25 @@ router.get("/", validateThoughtsQuery, async (req, res) => {
   }
 })
 
-// POST /thoughts - create a new thought (protected route)
-router.post("/", authenticateToken, async (req, res) => {
+// Middleware to conditionally apply authentication based on allowAnonymous flag
+const conditionalAuth = (req, res, next) => {
+  const { allowAnonymous } = req.query
+  
+  if (allowAnonymous === 'true') {
+    // Skip authentication for anonymous posts
+    req.user = null
+    next()
+  } else {
+    // Apply authentication middleware
+    authenticateToken(req, res, next)
+  }
+}
+
+// POST /thoughts - create a new thought (supports anonymous posting with allowAnonymous=true)
+router.post("/", thoughtCreationRateLimit, thoughtValidation, conditionalAuth, async (req, res) => {
   try {
     const { message, category = "General" } = req.body
+    const { allowAnonymous } = req.query
     
     // Validate required fields
     if (!message || message.trim().length === 0) {
@@ -75,11 +118,14 @@ router.post("/", authenticateToken, async (req, res) => {
       })
     }
     
+    // STRETCH-01: Handle anonymous vs authenticated posting
+    const owner = (allowAnonymous === 'true') ? null : req.user.userId
+    
     // Create new thought
     const thoughtData = {
       message: message.trim(),
       category,
-      owner: req.user.userId, // Link to authenticated user
+      owner,
       hearts: 0,
       likedBy: []
     }
@@ -96,6 +142,14 @@ router.post("/", authenticateToken, async (req, res) => {
     
   } catch (error) {
     console.error('Error creating thought:', error)
+    
+    // Handle authentication errors for non-anonymous posts
+    if (error.name === 'UnauthorizedError' || error.message?.includes('token')) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        details: "Authentication required. Use ?allowAnonymous=true for anonymous posting."
+      })
+    }
     
     // Handle validation errors
     if (error.name === 'ValidationError') {
