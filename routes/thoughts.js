@@ -288,6 +288,12 @@ router.put("/:id", authenticateToken, validateThoughtId, async (req, res) => {
       })
     }
     
+    // Temporary debug logging for ownership verification
+    console.log('Ownership Debug:');
+    console.log('- thought.owner._id:', thought.owner._id);
+    console.log('- userId:', userId);
+    console.log('- IDs match:', thought.owner.toString() === userId);
+
     // Check if the authenticated user is the owner
     if (!thought.owner || thought.owner.toString() !== userId) {
       return res.status(403).json({

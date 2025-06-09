@@ -21,8 +21,18 @@ export const authenticateToken = async (req, res, next) => {
     const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
     const decoded = jwt.verify(token, jwtSecret)
 
+    // Extract user ID from the correct field (frontend stores it in 'sub')
+    const userId = decoded.userId || decoded.sub || decoded.id
+
+    // Temporary debug logging for JWT token parsing
+    console.log('JWT Debug:');
+    console.log('- payload.userId:', decoded.userId);
+    console.log('- payload.sub:', decoded.sub);  
+    console.log('- payload.id:', decoded.id);
+    console.log('- Final userId:', userId);
+
     // Get user from database
-    const user = await User.findById(decoded.userId)
+    const user = await User.findById(userId)
     if (!user) {
       return res.status(401).json({
         error: 'Unauthorized',
@@ -81,8 +91,11 @@ export const optionalAuth = async (req, res, next) => {
     const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
     const decoded = jwt.verify(token, jwtSecret)
 
+    // Extract user ID from the correct field (frontend stores it in 'sub')
+    const userId = decoded.userId || decoded.sub || decoded.id
+
     // Get user from database
-    const user = await User.findById(decoded.userId)
+    const user = await User.findById(userId)
     if (user) {
       req.user = {
         userId: user._id,
