@@ -8,11 +8,7 @@ const connectDB = async () => {
   try {
     const mongoUrl = process.env.MONGO_URL || 'mongodb://localhost:27017/happy-thoughts'
     
-    const conn = await mongoose.connect(mongoUrl, {
-      // These options help with connection stability
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    })
+    const conn = await mongoose.connect(mongoUrl)
     
     console.log(`MongoDB Connected: ${conn.connection.host}`)
     
