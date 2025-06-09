@@ -1,0 +1,120 @@
+🛠️ Refactor Agent Playbook
+
+Goal: Walk every relevant source file one-by-one, making each as simple and idiomatic as possible while keeping the application continuously runnable.
+
+⸻
+
+0. ✏️ Agent-Generated Task List
+
+At start-up, the agent must scan the repo (see Scope below) and paste a Markdown check-list here.
+Format example:
+
+<!-- auto-generated -->
+- [ ] eslint.config.js
+- [ ] src/db.js
+- [ ] src/server.js
+- [ ] src/routes/index.js
+- [ ] src/services/dataService.js
+- [ ] src/utils/thoughtsHelper.js
+- [ ] src/middleware/validation.js
+- [ ] src/config/apiDocs.js
+- [ ] routes/thoughts.js
+- [ ] routes/auth.js
+- [ ] routes/users.js
+- [ ] controllers/authController.js
+- [ ] middleware/authMiddleware.js
+- [ ] middleware/rateLimiting.js
+- [ ] middleware/validation.js
+- [ ] models/Thought.js
+- [ ] models/User.js
+- [ ] scripts/seedThoughts.js
+- [ ] tests/integration.test.js
+- [ ] tests/thoughts.test.js
+- [ ] tests/public.test.js
+- [ ] tests/auth.test.js
+- [ ] tests/setup.js
+
+The agent will tick ([x]) each box when the corresponding file is fully refactored.
+
+⸻
+
+1. 📂 Scope & Filtering
+	•	Include: All project files ending in .js, .jsx, .ts, .tsx, .mjs, .cjs, .jsonc except those excluded below.
+	•	Exclude:
+	•	.env*, package.json, package-lock.json, pnpm-lock.yaml, yarn.lock
+	•	node_modules/**, dist/**, build/**, .git/**, .cache/**, coverage/**, *.min.*, *.bundle.*, *.generated.*, *.log, media assets.
+	•	Ignore files > 250 KB or marked generated.
+
+⸻
+
+2. 🗂️ Architectural Rules
+
+#	Rule
+2.1	Front-end lives in React + plain JavaScript (no TS) and sits under frontend/ or src/ui/.
+2.2	Back-end lives in Node-style JavaScript only; place under backend/ or src/server/.
+2.3	Remove or merge single-file directories—unless the folder is a clear public package boundary (pages/, routes/, etc.).
+2.4	When moving code, update all import paths and, if necessary, adjust package.json module field aliases.
+2.5	Keep a single source of truth for any duplicated logic; extract to shared/ utilities.
+
+
+⸻
+
+3. 🔄 One-File-at-a-Time Workflow
+	1.	Select the next unchecked file in the manifest.
+	2.	Parse & format with Prettier (project config if found, else default).
+	3.	Enforce Clean Code principles:
+	•	Small, purposeful functions (≤ 15 lines or ≤ 10 cognitive nodes).
+	•	Descriptive names; no Hungarian notation.
+	•	Minimal comments: only a JSDoc block above each exported function/class.
+	4.	Strip debug & dead code: remove console.*, debugger, print, unused vars/imports.
+	5.	Identify detachable logic: if a chunk clearly belongs elsewhere (e.g. a utility or separate component), move it to a new or existing file following §2 rules.
+After the move, return to step 2 for the new file on the next iteration—keep the one-file cadence.
+	6.	Run relevant tests (unit + integration) and npm run lint.
+If anything fails → revert changes, flag the file for manual review, tick it with :warning:.
+	7.	Commit only this file's changes (plus possible moved-file creation). Use commit message:
+
+chore(refactor): <filename> — clean code, format, relocate logic
+
+
+	8.	Mark the file's checkbox as done and repeat.
+
+⸻
+
+4. 🧰 Supporting Automation
+	•	Lint & Format Scripts must exist (lint, format) in package.json. Add if missing.
+	•	Use ESLint (airbnb or company config) + Prettier; auto-fix where confidence ≥ 0.9.
+	•	Duplicate detection (jscpd) runs nightly; the agent handles clones in normal flow when encountered.
+	•	Keep a running CHANGELOG.md section "Refactor Sweep YYYY-MM" with bullet lines per commit.
+
+⸻
+
+5. 🔐 Safety Nets
+	•	Work on branch refactor-sweep-<YYYYMMDD>.
+	•	After every commit, run the full test suite and push (CI will mirror our local pass).
+	•	Keep a "panic revert" macro commit if CI turns red unexpectedly.
+
+⸻
+
+6. ✅ Exit Criteria
+	1.	All manifest items are checked.
+	2.	npm run test & npm run lint pass with zero errors.
+	3.	No remaining console.* or debugger references.
+	4.	No duplicate-code blocks > 10 lines / 75 tokens (per nightly jscpd).
+	5.	The directory tree has no orphan single-file folders.
+	6.	PR is green in CI and ready for human review.
+
+⸻
+
+7. ➕ Recommended Add-Ons (Optional but Valuable)
+
+Added?	Recommendation	Why
+▢	Type-check with TypeScript on backend in --checkJs mode	Catches subtle bugs without full migration
+▢	Bundle size CI for front-end	Prevents regressions after refactor
+▢	Storybook for UI components	Visual safety net when moving React code
+
+(Feel free to tick any box and expand if you adopt the suggestion.)
+
+⸻
+
+Copy this Playbook into the agent's system prompt.
+The agent must self-update the manifest and follow the checklist until all items are complete.
