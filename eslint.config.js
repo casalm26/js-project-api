@@ -14,17 +14,17 @@ export default [
         __dirname: 'readonly',
         __filename: 'readonly',
         Buffer: 'readonly',
-        global: 'readonly'
-      }
+        global: 'readonly',
+      },
     },
     plugins: {
-      node
+      node,
     },
     rules: {
       'no-console': 'off',
       'node/no-unsupported-features/es-syntax': 'off',
-      'no-unused-vars': ['error', { 'argsIgnorePattern': '^_' }]
-    }
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
   },
-  prettier
-] 
+  prettier,
+]
