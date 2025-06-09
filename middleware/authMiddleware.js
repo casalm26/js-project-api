@@ -21,15 +21,8 @@ export const authenticateToken = async (req, res, next) => {
     const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-change-in-production'
     const decoded = jwt.verify(token, jwtSecret)
 
-    // Extract user ID from the correct field (frontend stores it in 'sub')
+    // Extract user ID from the correct field (with fallbacks)
     const userId = decoded.userId || decoded.sub || decoded.id
-
-    // Temporary debug logging for JWT token parsing
-    console.log('JWT Debug:');
-    console.log('- payload.userId:', decoded.userId);
-    console.log('- payload.sub:', decoded.sub);  
-    console.log('- payload.id:', decoded.id);
-    console.log('- Final userId:', userId);
 
     // Get user from database
     const user = await User.findById(userId)
