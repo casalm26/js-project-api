@@ -1,4 +1,5 @@
 import { body, validationResult } from 'express-validator'
+import mongoose from 'mongoose'
 
 // Validation constants
 const EMAIL_REGEX =
@@ -155,6 +156,13 @@ export const validateThoughtId = (req, res, next) => {
     return res.status(400).json({
       error: 'Bad request',
       details: 'ID parameter cannot be empty',
+    })
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({
+      error: 'Bad request',
+      details: 'Invalid thought ID format',
     })
   }
 
