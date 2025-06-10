@@ -31,11 +31,6 @@ export const getThoughts = () => {
   return loadThoughtsData()
 }
 
-/**
- * Finds a thought by its ID
- * @param {string} id - The thought ID to search for
- * @returns {Object|undefined} The thought object if found, undefined otherwise
- */
 export const getThoughtById = (id) => {
   const thoughts = getThoughts()
   return thoughts.find((thought) => thought._id === id)

@@ -1,42 +1,33 @@
 export const filterThoughts = (thoughts, { category }) => {
-  if (!category) return thoughts
-  
-  return thoughts.filter(thought => 
-    thought.category && thought.category.toLowerCase() === category.toLowerCase()
+  if (!thoughts || !category) return thoughts || []
+
+  return thoughts.filter((thought) =>
+    thought.category?.toLowerCase() === category.toLowerCase()
   )
 }
 
 export const sortThoughts = (thoughts, sortParam) => {
-  if (!sortParam) return thoughts
-  
+  if (!thoughts || !sortParam) return thoughts || []
+
   const isDescending = sortParam.startsWith('-')
-  const sortField = isDescending ? sortParam.substring(1) : sortParam
-  
-  return thoughts.sort((a, b) => {
-    let valueA = a[sortField]
-    let valueB = b[sortField]
-    
-    // Handle date sorting
-    if (sortField === 'createdAt') {
-      valueA = new Date(valueA)
-      valueB = new Date(valueB)
-    }
-    
-    if (isDescending) {
-      return valueB > valueA ? 1 : valueB < valueA ? -1 : 0
-    } else {
-      return valueA > valueB ? 1 : valueA < valueB ? -1 : 0
-    }
+  const field = isDescending ? sortParam.slice(1) : sortParam
+
+  return [...thoughts].sort((a, b) => {
+    const valueA = field === 'createdAt' ? new Date(a[field]) : a[field]
+    const valueB = field === 'createdAt' ? new Date(b[field]) : b[field]
+
+    const comparison = valueA > valueB ? 1 : valueA < valueB ? -1 : 0
+    return isDescending ? -comparison : comparison
   })
 }
 
 export const paginateThoughts = (thoughts, { page, limit }) => {
+  if (!thoughts) return []
   if (!page && !limit) return thoughts
-  
-  const pageNum = parseInt(page) || 1
-  const limitNum = parseInt(limit) || 20
-  const startIndex = (pageNum - 1) * limitNum
-  const endIndex = startIndex + limitNum
-  
-  return thoughts.slice(startIndex, endIndex)
-} 
+
+  const currentPage = Math.max(1, parseInt(page) || 1)
+  const itemsPerPage = Math.max(1, parseInt(limit) || 20)
+  const startIndex = (currentPage - 1) * itemsPerPage
+
+  return thoughts.slice(startIndex, startIndex + itemsPerPage)
+}

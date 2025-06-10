@@ -1,390 +1,362 @@
-import express from "express"
-import Thought from "../models/Thought.js"
-import { validateThoughtsQuery, validateThoughtId } from "../src/middleware/validation.js"
-import { thoughtValidation } from "../middleware/validation.js"
-import { authenticateToken } from "../middleware/authMiddleware.js"
-import { thoughtCreationRateLimit } from "../middleware/rateLimiting.js"
+import express from 'express'
+import Thought from '../models/Thought.js'
+import {
+  validateThoughtsQuery,
+  validateThoughtId,
+  thoughtValidation,
+} from '../middleware/validation.js'
+import { authenticateToken } from '../middleware/authMiddleware.js'
+import { thoughtCreationRateLimit } from '../middleware/rateLimiting.js'
 
 const router = express.Router()
 
-// GET /thoughts - return filtered, sorted, and paginated thoughts from MongoDB
-router.get("/", validateThoughtsQuery, async (req, res) => {
-  try {
-    const { page, limit, category, sort, minHearts, newerThan } = req.query
-    
-    // Build query object for filtering
-    const query = {}
-    if (category) {
-      query.category = new RegExp(category, 'i') // Case-insensitive search
-    }
-    
-    // STRETCH-04: Advanced filters
-    if (minHearts) {
-      const minHeartsNum = parseInt(minHearts)
-      if (!isNaN(minHeartsNum) && minHeartsNum >= 0) {
-        query.hearts = { $gte: minHeartsNum }
-      }
-    }
-    
-    if (newerThan) {
-      const date = new Date(newerThan)
-      if (date instanceof Date && !isNaN(date)) {
-        query.createdAt = { $gte: date }
-      }
-    }
-    
-    // Set up pagination
-    const pageNum = parseInt(page) || 1
-    const limitNum = parseInt(limit) || 20
-    const skip = (pageNum - 1) * limitNum
-    
-    // Build sort object - STRETCH-04: Enhanced sorting
-    let sortObj = { createdAt: -1 } // Default: newest first
-    if (sort) {
-      const isDescending = sort.startsWith('-')
-      const sortField = isDescending ? sort.substring(1) : sort
-      
-      // Allow sorting by different fields
-      const allowedSortFields = ['createdAt', 'updatedAt', 'hearts', 'category']
-      if (allowedSortFields.includes(sortField)) {
-        sortObj = { [sortField]: isDescending ? -1 : 1 }
-      }
-    }
-    
-    // Execute query with pagination and sorting
-    const thoughts = await Thought.find(query)
-      .sort(sortObj)
-      .skip(skip)
-      .limit(limitNum)
-      .populate('owner', 'name email') // Populate owner info if available
-      .exec()
-    
-    // Get total count for pagination metadata
-    const totalCount = await Thought.countDocuments(query)
-    const totalPages = Math.ceil(totalCount / limitNum)
-    
-    // Return thoughts with pagination metadata
-    res.status(200).json({
-      thoughts,
-      pagination: {
-        currentPage: pageNum,
-        totalPages,
-        totalCount,
-        hasNextPage: pageNum < totalPages,
-        hasPrevPage: pageNum > 1
-      },
-      filters: {
-        category,
-        minHearts,
-        newerThan,
-        sort
-      }
-    })
-    
-  } catch (error) {
-    console.error('Error fetching thoughts:', error)
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: "Failed to fetch thoughts"
-    })
-  }
+const ALLOWED_SORT_FIELDS = ['createdAt', 'updatedAt', 'hearts', 'category']
+
+const createErrorResponse = (status, error, details) => ({
+  status,
+  json: { error, details },
 })
 
-// Middleware to conditionally apply authentication based on allowAnonymous flag
+const handleCastError = () =>
+  createErrorResponse(400, 'Bad Request', 'Invalid thought ID format')
+
+const handleServerError = (action) =>
+  createErrorResponse(500, 'Internal Server Error', `Failed to ${action}`)
+
+const buildFilterQuery = ({ category, minHearts, newerThan }) => {
+  const query = {}
+
+  if (category) {
+    query.category = new RegExp(category, 'i')
+  }
+
+  if (minHearts) {
+    const minHeartsNum = parseInt(minHearts)
+    if (!isNaN(minHeartsNum) && minHeartsNum >= 0) {
+      query.hearts = { $gte: minHeartsNum }
+    }
+  }
+
+  if (newerThan) {
+    const date = new Date(newerThan)
+    if (date instanceof Date && !isNaN(date)) {
+      query.createdAt = { $gte: date }
+    }
+  }
+
+  return query
+}
+
+const buildSortObject = (sort) => {
+  if (!sort) return { createdAt: -1 }
+
+  const isDescending = sort.startsWith('-')
+  const sortField = isDescending ? sort.substring(1) : sort
+
+  if (!ALLOWED_SORT_FIELDS.includes(sortField)) {
+    return { createdAt: -1 }
+  }
+
+  return { [sortField]: isDescending ? -1 : 1 }
+}
+
+const calculatePagination = (page, limit) => {
+  const pageNum = parseInt(page) || 1
+  const limitNum = parseInt(limit) || 20
+  const skip = (pageNum - 1) * limitNum
+
+  return { pageNum, limitNum, skip }
+}
+
+const createPaginationMetadata = (pageNum, totalCount, limitNum) => {
+  const totalPages = Math.ceil(totalCount / limitNum)
+  return {
+    currentPage: pageNum,
+    totalPages,
+    totalCount,
+    hasNextPage: pageNum < totalPages,
+    hasPrevPage: pageNum > 1,
+  }
+}
+
+const checkOwnership = (thought, userId) => {
+  if (!thought.owner || thought.owner.toString() !== userId.toString()) {
+    return false
+  }
+  return true
+}
+
 const conditionalAuth = (req, res, next) => {
   const { allowAnonymous } = req.query
-  
+
   if (allowAnonymous === 'true') {
-    // Skip authentication for anonymous posts
     req.user = null
     next()
   } else {
-    // Apply authentication middleware
     authenticateToken(req, res, next)
   }
 }
 
-// POST /thoughts - create a new thought (supports anonymous posting with allowAnonymous=true)
-router.post("/", thoughtCreationRateLimit, thoughtValidation, conditionalAuth, async (req, res) => {
+router.get('/', validateThoughtsQuery, async (req, res) => {
   try {
-    const { message, category = "General" } = req.body
-    const { allowAnonymous } = req.query
-    
-    // Validate required fields
-    if (!message || message.trim().length === 0) {
-      return res.status(400).json({
-        error: "Bad Request",
-        details: "Message is required"
-      })
-    }
-    
-    // STRETCH-01: Handle anonymous vs authenticated posting
-    const owner = (allowAnonymous === 'true') ? null : req.user.userId
-    
-    // Create new thought
-    const thoughtData = {
-      message: message.trim(),
-      category,
-      owner,
-      hearts: 0,
-      likedBy: []
-    }
-    
-    const newThought = new Thought(thoughtData)
-    const savedThought = await newThought.save()
-    
-    // Populate owner info and return
-    const populatedThought = await Thought.findById(savedThought._id)
+    const { page, limit, category, sort, minHearts, newerThan } = req.query
+
+    const query = buildFilterQuery({ category, minHearts, newerThan })
+    const sortObj = buildSortObject(sort)
+    const { pageNum, limitNum, skip } = calculatePagination(page, limit)
+
+    const thoughts = await Thought.find(query)
+      .sort(sortObj)
+      .skip(skip)
+      .limit(limitNum)
       .populate('owner', 'name email')
       .exec()
-    
-    res.status(201).json(populatedThought)
-    
-  } catch (error) {
-    console.error('Error creating thought:', error)
-    
-    // Handle authentication errors for non-anonymous posts
-    if (error.name === 'UnauthorizedError' || error.message?.includes('token')) {
-      return res.status(401).json({
-        error: "Unauthorized",
-        details: "Authentication required. Use ?allowAnonymous=true for anonymous posting."
-      })
-    }
-    
-    // Handle validation errors
-    if (error.name === 'ValidationError') {
-      return res.status(422).json({
-        error: "Validation Error",
-        details: Object.values(error.errors).map(e => e.message)
-      })
-    }
-    
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: "Failed to create thought"
+
+    const totalCount = await Thought.countDocuments(query)
+    const pagination = createPaginationMetadata(pageNum, totalCount, limitNum)
+
+    res.status(200).json({
+      thoughts,
+      pagination,
+      filters: { category, minHearts, newerThan, sort },
     })
+  } catch {
+    const errorResponse = handleServerError('fetch thoughts')
+    res.status(errorResponse.status).json(errorResponse.json)
   }
 })
 
-// GET /thoughts/:id - return single thought by ID from MongoDB
-router.get("/:id", validateThoughtId, async (req, res) => {
+router.post(
+  '/',
+  thoughtCreationRateLimit,
+  thoughtValidation,
+  conditionalAuth,
+  async (req, res) => {
+    try {
+      const { message, category = 'General' } = req.body
+      const { allowAnonymous } = req.query
+
+      if (!message || message.trim().length === 0) {
+        const errorResponse = createErrorResponse(
+          400,
+          'Bad Request',
+          'Message is required'
+        )
+        return res.status(errorResponse.status).json(errorResponse.json)
+      }
+
+      const owner = allowAnonymous === 'true' ? null : req.user.userId
+
+      const thoughtData = {
+        message: message.trim(),
+        category,
+        owner,
+        hearts: 0,
+        likedBy: [],
+      }
+
+      const newThought = new Thought(thoughtData)
+      const savedThought = await newThought.save()
+
+      const populatedThought = await Thought.findById(savedThought._id)
+        .populate('owner', 'name email')
+        .exec()
+
+      res.status(201).json(populatedThought)
+    } catch (error) {
+      if (error.name === 'UnauthorizedError' || error.message?.includes('token')) {
+        const errorResponse = createErrorResponse(
+          401,
+          'Unauthorized',
+          'Authentication required. Use ?allowAnonymous=true for anonymous posting.'
+        )
+        return res.status(errorResponse.status).json(errorResponse.json)
+      }
+
+      if (error.name === 'ValidationError') {
+        const errorResponse = createErrorResponse(
+          422,
+          'Validation Error',
+          Object.values(error.errors).map((e) => e.message)
+        )
+        return res.status(errorResponse.status).json(errorResponse.json)
+      }
+
+      const errorResponse = handleServerError('create thought')
+      res.status(errorResponse.status).json(errorResponse.json)
+    }
+  }
+)
+
+router.get('/:id', validateThoughtId, async (req, res) => {
   try {
     const { id } = req.params
-    
+
     const thought = await Thought.findById(id)
-      .populate('owner', 'name email') // Populate owner info if available
+      .populate('owner', 'name email')
       .exec()
-    
+
     if (!thought) {
-      return res.status(404).json({ 
-        error: "Not found",
-        details: `Thought with ID '${id}' does not exist`
-      })
+      const errorResponse = createErrorResponse(
+        404,
+        'Not found',
+        `Thought with ID '${id}' does not exist`
+      )
+      return res.status(errorResponse.status).json(errorResponse.json)
     }
-    
+
     res.status(200).json(thought)
-    
   } catch (error) {
-    console.error('Error fetching thought:', error)
-    
-    // Handle invalid ObjectId errors
     if (error.name === 'CastError') {
-      return res.status(400).json({
-        error: "Bad Request",
-        details: "Invalid thought ID format"
-      })
+      const errorResponse = handleCastError()
+      return res.status(errorResponse.status).json(errorResponse.json)
     }
-    
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: "Failed to fetch thought"
-    })
+
+    const errorResponse = handleServerError('fetch thought')
+    res.status(errorResponse.status).json(errorResponse.json)
   }
 })
 
-// POST /thoughts/:id/like - toggle like/unlike for authenticated user (idempotent)
-router.post("/:id/like", authenticateToken, validateThoughtId, async (req, res) => {
+router.post('/:id/like', authenticateToken, validateThoughtId, async (req, res) => {
   try {
     const { id } = req.params
     const userId = req.user.userId
-    
+
     const thought = await Thought.findById(id)
-    
+
     if (!thought) {
-      return res.status(404).json({
-        error: "Not found",
-        details: `Thought with ID '${id}' does not exist`
-      })
+      const errorResponse = createErrorResponse(
+        404,
+        'Not found',
+        `Thought with ID '${id}' does not exist`
+      )
+      return res.status(errorResponse.status).json(errorResponse.json)
     }
-    
-    // Check if user has already liked this thought
-    const hasLiked = thought.likedBy.includes(userId)
-    
-    let updatedThought
-    if (hasLiked) {
-      // Unlike: remove user from likedBy array and decrement hearts
-      updatedThought = await Thought.findByIdAndUpdate(
-        id,
-        {
-          $pull: { likedBy: userId },
-          $inc: { hearts: -1 }
-        },
-        { new: true }
-      ).populate('owner', 'name email')
-    } else {
-      // Like: add user to likedBy array and increment hearts
-      updatedThought = await Thought.findByIdAndUpdate(
-        id,
-        {
-          $addToSet: { likedBy: userId }, // $addToSet prevents duplicates
-          $inc: { hearts: 1 }
-        },
-        { new: true }
-      ).populate('owner', 'name email')
-    }
-    
+
+    const hasLiked = thought.likedBy.some(id => id.toString() === userId.toString())
+
+    const updateOperation = hasLiked
+      ? { $pull: { likedBy: userId }, $inc: { hearts: -1 } }
+      : { $addToSet: { likedBy: userId }, $inc: { hearts: 1 } }
+
+    const updatedThought = await Thought.findByIdAndUpdate(id, updateOperation, {
+      new: true,
+    }).populate('owner', 'name email')
+
     res.status(200).json(updatedThought)
-    
   } catch (error) {
-    console.error('Error toggling like:', error)
-    
-    // Handle invalid ObjectId errors
     if (error.name === 'CastError') {
-      return res.status(400).json({
-        error: "Bad Request",
-        details: "Invalid thought ID format"
-      })
+      const errorResponse = handleCastError()
+      return res.status(errorResponse.status).json(errorResponse.json)
     }
-    
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: "Failed to toggle like"
-    })
+
+    const errorResponse = handleServerError('toggle like')
+    res.status(errorResponse.status).json(errorResponse.json)
   }
 })
 
-// PUT /thoughts/:id - edit thought message (owner only)
-router.put("/:id", authenticateToken, validateThoughtId, async (req, res) => {
+router.put('/:id', authenticateToken, validateThoughtId, async (req, res) => {
   try {
     const { id } = req.params
     const { message } = req.body
     const userId = req.user.userId
-    
-    // Validate message
+
     if (!message || message.trim().length === 0) {
-      return res.status(400).json({
-        error: "Bad Request",
-        details: "Message is required"
-      })
+      const errorResponse = createErrorResponse(
+        400,
+        'Bad Request',
+        'Message is required'
+      )
+      return res.status(errorResponse.status).json(errorResponse.json)
     }
-    
-    // Find the thought first to check ownership
+
     const thought = await Thought.findById(id)
-    
+
     if (!thought) {
-      return res.status(404).json({
-        error: "Not found",
-        details: `Thought with ID '${id}' does not exist`
-      })
+      const errorResponse = createErrorResponse(
+        404,
+        'Not found',
+        `Thought with ID '${id}' does not exist`
+      )
+      return res.status(errorResponse.status).json(errorResponse.json)
     }
-    
-    // Check if the authenticated user is the owner (ensure both are strings)
-    if (!thought.owner || thought.owner.toString() !== userId.toString()) {
-      return res.status(403).json({
-        error: "Forbidden",
-        details: "You can only edit your own thoughts"
-      })
+
+    if (!checkOwnership(thought, userId)) {
+      const errorResponse = createErrorResponse(
+        403,
+        'Forbidden',
+        'You can only edit your own thoughts'
+      )
+      return res.status(errorResponse.status).json(errorResponse.json)
     }
-    
-    // Update the thought
+
     const updatedThought = await Thought.findByIdAndUpdate(
       id,
-      { 
-        message: message.trim(),
-        updatedAt: new Date()
-      },
+      { message: message.trim(), updatedAt: new Date() },
       { new: true }
     ).populate('owner', 'name email')
-    
+
     res.status(200).json(updatedThought)
-    
   } catch (error) {
-    console.error('Error updating thought:', error)
-    
-    // Handle invalid ObjectId errors
     if (error.name === 'CastError') {
-      return res.status(400).json({
-        error: "Bad Request",
-        details: "Invalid thought ID format"
-      })
+      const errorResponse = handleCastError()
+      return res.status(errorResponse.status).json(errorResponse.json)
     }
-    
-    // Handle validation errors
+
     if (error.name === 'ValidationError') {
-      return res.status(422).json({
-        error: "Validation Error",
-        details: Object.values(error.errors).map(e => e.message)
-      })
+      const errorResponse = createErrorResponse(
+        422,
+        'Validation Error',
+        Object.values(error.errors).map((e) => e.message)
+      )
+      return res.status(errorResponse.status).json(errorResponse.json)
     }
-    
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: "Failed to update thought"
-    })
+
+    const errorResponse = handleServerError('update thought')
+    res.status(errorResponse.status).json(errorResponse.json)
   }
 })
 
-// DELETE /thoughts/:id - delete thought (owner only)
-router.delete("/:id", authenticateToken, validateThoughtId, async (req, res) => {
+router.delete('/:id', authenticateToken, validateThoughtId, async (req, res) => {
   try {
     const { id } = req.params
     const userId = req.user.userId
-    
-    // Find the thought first to check ownership
+
     const thought = await Thought.findById(id)
-    
+
     if (!thought) {
-      return res.status(404).json({
-        error: "Not found",
-        details: `Thought with ID '${id}' does not exist`
-      })
+      const errorResponse = createErrorResponse(
+        404,
+        'Not found',
+        `Thought with ID '${id}' does not exist`
+      )
+      return res.status(errorResponse.status).json(errorResponse.json)
     }
-    
-    // Check if the authenticated user is the owner (ensure both are strings)
-    if (!thought.owner || thought.owner.toString() !== userId.toString()) {
-      return res.status(403).json({
-        error: "Forbidden",
-        details: "You can only delete your own thoughts"
-      })
+
+    if (!checkOwnership(thought, userId)) {
+      const errorResponse = createErrorResponse(
+        403,
+        'Forbidden',
+        'You can only delete your own thoughts'
+      )
+      return res.status(errorResponse.status).json(errorResponse.json)
     }
-    
-    // Delete the thought
+
     await Thought.findByIdAndDelete(id)
-    
+
     res.status(200).json({
-      message: "Thought deleted successfully",
-      deletedThought: {
-        id: thought._id,
-        message: thought.message
-      }
+      message: 'Thought deleted successfully',
+      deletedThought: { id: thought._id, message: thought.message },
     })
-    
   } catch (error) {
-    console.error('Error deleting thought:', error)
-    
-    // Handle invalid ObjectId errors
     if (error.name === 'CastError') {
-      return res.status(400).json({
-        error: "Bad Request",
-        details: "Invalid thought ID format"
-      })
+      const errorResponse = handleCastError()
+      return res.status(errorResponse.status).json(errorResponse.json)
     }
-    
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: "Failed to delete thought"
-    })
+
+    const errorResponse = handleServerError('delete thought')
+    res.status(errorResponse.status).json(errorResponse.json)
   }
 })
 
-export default router 
+export default router

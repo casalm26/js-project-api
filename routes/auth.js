@@ -15,4 +15,4 @@ router.post('/login', authRateLimit, loginValidation, login)
 // GET /auth/me - Get current user profile (requires authentication)
 router.get('/me', authenticateToken, getProfile)
 
-export default router 
+export default router

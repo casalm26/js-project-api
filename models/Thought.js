@@ -1,41 +1,73 @@
 import mongoose from 'mongoose'
 
-const thoughtSchema = new mongoose.Schema({
-  message: {
-    type: String,
-    required: [true, 'Message is required'],
-    trim: true,
-    minlength: [5, 'Message must be at least 5 characters long'],
-    maxlength: [140, 'Message cannot exceed 140 characters']
+// Constants for data integrity (not validation limits - those are in middleware)
+const MIN_HEARTS = 0
+
+const CATEGORIES = [
+  'Travel',
+  'Family',
+  'Food',
+  'Health',
+  'Friends',
+  'Humor',
+  'Entertainment',
+  'Weather',
+  'Animals',
+  'General',
+]
+
+// Helper functions
+const createUserObjectId = (userId) => new mongoose.Types.ObjectId(userId)
+
+const isUserInArray = (userArray, userId) => {
+  const userObjectId = createUserObjectId(userId)
+  return userArray.some((id) => id.equals(userObjectId))
+}
+
+const removeUserFromArray = (userArray, userId) => {
+  const userObjectId = createUserObjectId(userId)
+  return userArray.filter((id) => !id.equals(userObjectId))
+}
+
+const thoughtSchema = new mongoose.Schema(
+  {
+    message: {
+      type: String,
+      required: [true, 'Message is required'],
+      trim: true,
+    },
+    hearts: {
+      type: Number,
+      default: 0,
+      min: [MIN_HEARTS, 'Hearts cannot be negative'],
+    },
+    category: {
+      type: String,
+      required: [true, 'Category is required'],
+      enum: {
+        values: CATEGORIES,
+        message: 'Category must be one of the predefined values',
+      },
+    },
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    likedBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
   },
-  hearts: {
-    type: Number,
-    default: 0,
-    min: [0, 'Hearts cannot be negative']
-  },
-  category: {
-    type: String,
-    required: [true, 'Category is required'],
-    enum: {
-      values: ['Travel', 'Family', 'Food', 'Health', 'Friends', 'Humor', 'Entertainment', 'Weather', 'Animals', 'General'],
-      message: 'Category must be one of the predefined values'
-    }
-  },
-  owner: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    default: null // Allows for anonymous thoughts (owner = null)
-  },
-  likedBy: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }]
-}, {
-  timestamps: true // Adds createdAt and updatedAt fields
-})
+  {
+    timestamps: true,
+  }
+)
 
 // Virtual for likes count based on likedBy array length
-thoughtSchema.virtual('likesCount').get(function() {
+thoughtSchema.virtual('likesCount').get(function () {
   return this.likedBy ? this.likedBy.length : 0
 })
 
@@ -50,35 +82,31 @@ thoughtSchema.index({ category: 1 }) // Category filtering
 thoughtSchema.index({ owner: 1 }) // User's thoughts
 
 // Instance method to toggle like from a user
-thoughtSchema.methods.toggleLike = function(userId) {
-  const userObjectId = new mongoose.Types.ObjectId(userId)
-  const isLiked = this.likedBy.includes(userObjectId)
-  
+thoughtSchema.methods.toggleLike = function (userId) {
+  const isLiked = isUserInArray(this.likedBy, userId)
+
   if (isLiked) {
-    // Unlike: remove user from likedBy array
-    this.likedBy = this.likedBy.filter(id => !id.equals(userObjectId))
-    this.hearts = Math.max(0, this.hearts - 1) // Ensure hearts don't go negative
+    this.likedBy = removeUserFromArray(this.likedBy, userId)
+    this.hearts = Math.max(MIN_HEARTS, this.hearts - 1)
   } else {
-    // Like: add user to likedBy array
-    this.likedBy.push(userObjectId)
+    this.likedBy.push(createUserObjectId(userId))
     this.hearts += 1
   }
-  
+
   return this.save()
 }
 
 // Static method to find thoughts by category
-thoughtSchema.statics.findByCategory = function(category) {
+thoughtSchema.statics.findByCategory = function (category) {
   return this.find({ category: new RegExp(category, 'i') })
 }
 
 // Pre-save middleware to ensure hearts matches likedBy length
-thoughtSchema.pre('save', function(next) {
-  // Sync hearts count with likedBy array length
+thoughtSchema.pre('save', function (next) {
   this.hearts = this.likedBy ? this.likedBy.length : 0
   next()
 })
 
 const Thought = mongoose.model('Thought', thoughtSchema)
 
-export default Thought 
+export default Thought
