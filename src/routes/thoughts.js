@@ -112,11 +112,12 @@ router.get('/', validateThoughtsQuery, async (req, res) => {
       .populate('owner', 'name email')
       .exec()
 
-    const totalCount = await Thought.countDocuments(query)
-    const pagination = createPaginationMetadata(pageNum, totalCount, limitNum)
+    const total = await Thought.countDocuments(query)
+    const pagination = createPaginationMetadata(pageNum, total, limitNum)
 
     res.status(200).json({
       thoughts,
+      total,
       pagination,
       filters: { category, minHearts, newerThan, sort },
     })
