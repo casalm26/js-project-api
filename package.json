@@ -8,6 +8,7 @@
     "dev": "nodemon src/server.js --exec babel-node",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "seed": "babel-node scripts/seedThoughtsAPI.js",
     "test": "NODE_ENV=test jest --detectOpenHandles",
     "test:watch": "NODE_ENV=test jest --watch --detectOpenHandles"
   },
@@ -27,6 +28,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.15.1",
+    "node-fetch": "^3.3.2",
     "nodemon": "^3.0.1"
   },
   "devDependencies": {
