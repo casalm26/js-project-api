@@ -4,8 +4,8 @@
   "description": "Project API",
   "type": "module",
   "scripts": {
-    "start": "babel-node src/server.js",
-    "dev": "nodemon src/server.js --exec babel-node",
+    "start": "babel-node src/app.js",
+    "dev": "nodemon src/app.js --exec babel-node",
     "lint": "eslint .",
     "format": "prettier --write .",
     "seed": "babel-node scripts/seedThoughtsAPI.js",

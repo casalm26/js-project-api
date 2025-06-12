@@ -2,11 +2,11 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import dotenv from 'dotenv'
-import connectDB from './db.js'
-import indexRoutes from './routes/index.js'
-import thoughtsRoutes from '../routes/thoughts.js'
-import authRoutes from '../routes/auth.js'
-import usersRoutes from '../routes/users.js'
+import connectDB from './config/db.js'
+import indexRoutes from './index.js'
+import thoughtsRoutes from './routes/thoughts.js'
+import authRoutes from './routes/auth.js'
+import usersRoutes from './routes/users.js'
 
 // Load environment variables
 dotenv.config()
