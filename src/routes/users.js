@@ -112,7 +112,7 @@ router.get('/me/likes', authenticateToken, async (req, res) => {
 })
 
 // GET /users/me/thoughts - return thoughts created by the authenticated user
-router.get('/me/thoughts', validateThoughtsQuery, authenticateToken, async (req, res) => {
+router.get('/me/thoughts', authenticateToken, validateThoughtsQuery, async (req, res) => {
   try {
     const userId = req.user.userId
     const { page, limit, sort, category, minHearts, newerThan } = req.query
