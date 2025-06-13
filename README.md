@@ -5,6 +5,7 @@ A REST API for managing happy thoughts with user authentication, filtering, sort
 ## Live API
 
 🌐 **Production URL**: https://friendlytwitter-api.onrender.com
+Live full website: https://friendlytwitter.netlify.app/
 
 ## Endpoints
 
@@ -160,80 +161,3 @@ curl https://friendlytwitter-api.onrender.com/users/me/likes \
   }
 }
 ```
-
-## Features
-
-- 🔐 **User Authentication** - JWT-based signup/login system
-- 📝 **CRUD Operations** - Create, read, update, delete thoughts
-- ❤️ **Like System** - Like/unlike thoughts with heart counter
-- 🔍 **Advanced Filtering** - Filter by category, hearts, date
-- 📊 **Sorting** - Sort by multiple fields (ascending/descending)
-- 📄 **Pagination** - Efficient pagination with metadata
-- 👤 **User-specific Views** - View your own thoughts and likes
-- 🛡️ **Input Validation** - Comprehensive validation and sanitization
-- 🚦 **Rate Limiting** - Protection against spam and abuse
-- 🔒 **Security** - Helmet, CORS, password encryption
-- 📚 **API Documentation** - Auto-generated endpoint listing
-
-## Project Structure
-
-```
-src/
-├── controllers/         # Request handlers & business logic
-├── models/             # Database models (User, Thought)
-├── routes/             # API route definitions
-├── middleware/         # Authentication, validation, rate limiting
-├── services/           # External services & data processing
-├── utils/              # Helper functions & utilities
-├── config/             # Database configuration
-├── app.js              # Main Express application
-└── index.js            # API documentation routes
-```
-
-## Development
-
-### Prerequisites
-
-- Node.js (v14 or higher)
-- MongoDB database
-- Environment variables (see .env.example)
-
-### Getting Started
-
-```bash
-# Clone the repository
-git clone <your-repo-url>
-cd js-project-api
-
-# Install dependencies
-npm install
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your MongoDB URI and JWT secret
-
-# Start development server
-npm run dev
-
-# Start production server
-npm start
-```
-
-### Available Scripts
-
-```bash
-npm run dev        # Start development server with nodemon
-npm start          # Start production server
-npm run lint       # Run ESLint
-npm run format     # Format code with Prettier
-npm run seed       # Seed database with sample data
-npm test           # Run tests
-```
-
-### Local Development
-
-Server runs on http://localhost:8080
-
-### API Testing
-
-Use the provided curl examples or tools like Postman to test the API endpoints.
