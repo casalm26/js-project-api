@@ -1,40 +1,131 @@
 # Happy Thoughts API
 
-A REST API for managing happy thoughts with filtering, sorting, and pagination.
+A REST API for managing happy thoughts with user authentication, filtering, sorting, and pagination.
+
+## Live API
+
+🌐 **Production URL**: https://friendlytwitter-api.onrender.com
 
 ## Endpoints
 
+### Documentation
+
 - `GET /` - List all available endpoints
-- `GET /thoughts` - Get all thoughts (with optional filters)
+
+### Thoughts
+
+- `GET /thoughts` - Get all thoughts (with optional filters, sorting, pagination)
 - `GET /thoughts/:id` - Get single thought by ID
+- `POST /thoughts` - Create a new thought (authenticated)
+- `PUT /thoughts/:id` - Update a thought (authenticated, owner only)
+- `DELETE /thoughts/:id` - Delete a thought (authenticated, owner only)
+- `POST /thoughts/:id/like` - Like/unlike a thought (authenticated)
+
+### Authentication
+
+- `POST /auth/signup` - Register a new user
+- `POST /auth/login` - Login user
+- `GET /auth/me` - Get current user profile (authenticated)
+
+### Users
+
+- `GET /users/:id/thoughts` - Get thoughts by specific user (authenticated)
 
 ## Query Parameters
 
 **GET /thoughts** supports:
 
-- `page` - Page number (pagination)
-- `limit` - Results per page (1-100)
-- `category` - Filter by category
-- `sort` - Sort by hearts, createdAt, \_id, message (use `-` for descending)
+- `page` - Page number for pagination (default: 1)
+- `limit` - Results per page, max 100 (default: 20)
+- `category` - Filter by category (case-insensitive)
+- `sort` - Sort by: `hearts`, `createdAt`, `updatedAt`, `category` (use `-` prefix for descending)
+- `minHearts` - Filter thoughts with minimum number of hearts
+- `newerThan` - Filter thoughts created after specific date (ISO format)
+
+## Authentication
+
+Include the JWT token in the Authorization header:
+
+```
+Authorization: Bearer YOUR_JWT_TOKEN
+```
 
 ## Examples
 
-```bash
-# Get all thoughts
-curl http://localhost:8080/thoughts
-
-# Get thoughts with pagination
-curl http://localhost:8080/thoughts?page=1&limit=5
-
-# Filter and sort
-curl http://localhost:8080/thoughts?category=Food&sort=-hearts
-```
-
-## Development
+### Get API Documentation
 
 ```bash
-npm install
-npm run dev
+curl https://friendlytwitter-api.onrender.com/
 ```
 
-Server runs on http://localhost:8080
+### Get All Thoughts
+
+```bash
+curl https://friendlytwitter-api.onrender.com/thoughts
+```
+
+### Get Thoughts with Pagination
+
+```bash
+curl https://friendlytwitter-api.onrender.com/thoughts?page=1&limit=5
+```
+
+### Filter and Sort Thoughts
+
+```bash
+curl https://friendlytwitter-api.onrender.com/thoughts?category=Food&sort=-hearts&minHearts=5
+```
+
+### Register a New User
+
+```bash
+curl -X POST https://friendlytwitter-api.onrender.com/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"SecurePass123","name":"John Doe"}'
+```
+
+### Login
+
+```bash
+curl -X POST https://friendlytwitter-api.onrender.com/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"SecurePass123"}'
+```
+
+### Create a Thought (Authenticated)
+
+```bash
+curl -X POST https://friendlytwitter-api.onrender.com/thoughts \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{"message":"This is my happy thought!","category":"General"}'
+```
+
+### Like a Thought
+
+```bash
+curl -X POST https://friendlytwitter-api.onrender.com/thoughts/THOUGHT_ID/like \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+## Response Format
+
+### Thoughts List Response
+
+```json
+{
+  "thoughts": [...],
+  "total": 123,
+  "pagination": {
+    "currentPage": 1,
+    "totalPages": 7,
+    "totalCount": 123,
+    "hasNextPage": true,
+    "hasPrevPage": false
+  },
+  "filters": {
+    "category": "Food",
+    "sort": "-hearts"
+  }
+}
+```

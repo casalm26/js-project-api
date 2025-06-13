@@ -86,17 +86,6 @@ const checkOwnership = (thought, userId) => {
   return true
 }
 
-const conditionalAuth = (req, res, next) => {
-  const { allowAnonymous } = req.query
-
-  if (allowAnonymous === 'true') {
-    req.user = null
-    next()
-  } else {
-    authenticateToken(req, res, next)
-  }
-}
-
 router.get('/', validateThoughtsQuery, async (req, res) => {
   try {
     const { page, limit, category, sort, minHearts, newerThan } = req.query
@@ -131,11 +120,10 @@ router.post(
   '/',
   thoughtCreationRateLimit,
   thoughtValidation,
-  conditionalAuth,
+  authenticateToken,
   async (req, res) => {
     try {
       const { message, category = 'General' } = req.body
-      const { allowAnonymous } = req.query
 
       if (!message || message.trim().length === 0) {
         const errorResponse = createErrorResponse(
@@ -146,12 +134,10 @@ router.post(
         return res.status(errorResponse.status).json(errorResponse.json)
       }
 
-      const owner = allowAnonymous === 'true' ? null : req.user.userId
-
       const thoughtData = {
         message: message.trim(),
         category,
-        owner,
+        owner: req.user.userId,
         hearts: 0,
         likedBy: [],
       }
@@ -165,15 +151,6 @@ router.post(
 
       res.status(201).json(populatedThought)
     } catch (error) {
-      if (error.name === 'UnauthorizedError' || error.message?.includes('token')) {
-        const errorResponse = createErrorResponse(
-          401,
-          'Unauthorized',
-          'Authentication required. Use ?allowAnonymous=true for anonymous posting.'
-        )
-        return res.status(errorResponse.status).json(errorResponse.json)
-      }
-
       if (error.name === 'ValidationError') {
         const errorResponse = createErrorResponse(
           422,
